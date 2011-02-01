@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Messaging;
 using System.Transactions;
 
 namespace NServiceBus.Utils
@@ -27,12 +28,46 @@ namespace NServiceBus.Utils
         [DebuggerNonUserCode] // so that exceptions don't interfere with debugging.
         public void RunInTransaction(Action callback, IsolationLevel isolationLevel, TimeSpan transactionTimeout)
         {
-            using (var scope = new TransactionScope(TransactionScopeOption.Required, new TransactionOptions { IsolationLevel = isolationLevel, Timeout = transactionTimeout }))
+            if (MsmqOnly)
             {
-                callback();
+                using (var trans = new MessageQueueTransaction())
+                {
+                    MsmqUtilities.CurrentTransaction = trans;
+                    try
+                    {
+                        trans.Begin();
+                        callback();
+                        trans.Commit();
+                    }
+                    catch (Exception)
+                    {
+                        trans.Abort();
+                        throw;
+                    }
+                    finally
+                    {
+                        MsmqUtilities.CurrentTransaction = null;
+                    }
+                }
+            }
+            else
+            {
+                using (
+                    var scope = new TransactionScope(TransactionScopeOption.Required,
+                                                     new TransactionOptions
+                                                         {IsolationLevel = isolationLevel, Timeout = transactionTimeout})
+                    )
+                {
+                    callback();
 
-                scope.Complete();
+                    scope.Complete();
+                }
             }
         }
+
+        /// <summary>
+        /// If true, only uses Msmq transactions, if false uses a TransactionScope
+        /// </summary>
+	    public bool MsmqOnly { get; set; }
     }
 }

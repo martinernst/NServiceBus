@@ -19,6 +19,11 @@ namespace NServiceBus.Unicast.Transport.Transactional
 		/// </summary>
         public bool IsTransactional { get; set; }
 
+        /// <summary>
+        /// Sets whether or not to use ambient transactions
+        /// </summary>
+        public bool DisableAmbientTransactions { get; set; }
+        
 	    private int maxRetries = 5;
 
         /// <summary>
@@ -75,6 +80,13 @@ namespace NServiceBus.Unicast.Transport.Transactional
         /// Event which indicates that message processing failed for some reason.
         /// </summary>
 	    public event EventHandler FailedMessageProcessing;
+
+        /// <summary>
+        /// Event which is called after all the message processing is done,
+        /// after the finished message processing event
+        /// and after the failed message processing event
+        /// </summary>
+        public event EventHandler<MessageCompletedEventArgs> CompletedMessageProcessing;
 
         /// <summary>
         /// Gets/sets the number of concurrent threads that should be
@@ -196,15 +208,17 @@ namespace NServiceBus.Unicast.Transport.Transactional
 
 		    _needToAbort = false;
 		    _messageId = string.Empty;
+		    bool succeeded = false;
 
             try
             {
                 if (IsTransactional)
-                    new TransactionWrapper().RunInTransaction(ProcessMessage, IsolationLevel, TransactionTimeout);
+                    new TransactionWrapper{MsmqOnly = DisableAmbientTransactions}.RunInTransaction(ProcessMessage, IsolationLevel, TransactionTimeout);                
                 else
                     ProcessMessage();
 
                 ClearFailuresForMessage(_messageId);
+                succeeded = true;
             }
             catch (AbortHandlingCurrentMessageException)
             {
@@ -225,6 +239,10 @@ namespace NServiceBus.Unicast.Transport.Transactional
 
                 OnFailedMessageProcessing();
             }
+            finally
+            {
+                OnCompletedMessageProcessing(succeeded);
+            }            
         }
 
 	    /// <summary>
@@ -279,27 +297,23 @@ namespace NServiceBus.Unicast.Transport.Transactional
         {
             string messageId = message.Id;
 
-            failuresPerMessageLocker.EnterReadLock();
-
-            if (failuresPerMessage.ContainsKey(messageId) &&
-                   (failuresPerMessage[messageId] >= maxRetries))
+            using (failuresPerMessageLocker.ReadLock())
             {
-                failuresPerMessageLocker.ExitReadLock();
-                failuresPerMessageLocker.EnterWriteLock();
+                int value = 0;
+                if (!failuresPerMessage.TryGetValue(messageId, out value) || value < maxRetries)
+                    return false;
+            }
 
+            using(failuresPerMessageLocker.WriteLock())
+            {
                 var ex = exceptionsForMessages[messageId];
                 FailureManager.ProcessingAlwaysFailsForMessage(message, ex);
 
                 failuresPerMessage.Remove(messageId);
                 exceptionsForMessages.Remove(messageId);
 
-                failuresPerMessageLocker.ExitWriteLock();
-
                 return true;
             }
-
-            failuresPerMessageLocker.ExitReadLock();
-            return false;
         }
 
 	    private void ClearFailuresForMessage(string messageId)
@@ -433,6 +447,36 @@ namespace NServiceBus.Unicast.Transport.Transactional
 
             return true;
         }
+        
+        private bool OnCompletedMessageProcessing(bool succeeded)
+        {
+            try
+            {
+                if (CompletedMessageProcessing != null)
+                {
+                    foreach(EventHandler<MessageCompletedEventArgs> del in CompletedMessageProcessing.GetInvocationList())
+                    {
+                        try
+                        {
+                            del(this, new MessageCompletedEventArgs{Succeeded = succeeded});
+                        }
+                        catch(Exception e)
+                        {
+                            Logger.Warn("Failed raising 'completed message processing' event", e);
+                            succeeded = false;
+                        }
+                    }
+                }
+
+                return succeeded;
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Failed raising 'completed message processing' event.", e);
+                return false;
+            }
+        }
+
 
         #endregion
 

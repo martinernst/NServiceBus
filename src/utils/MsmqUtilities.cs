@@ -198,6 +198,9 @@ namespace NServiceBus.Utils
             return qMgmt.MessageCount;
         }
 
+        [ThreadStatic]
+        public static MessageQueueTransaction CurrentTransaction; 
+
         private const string DIRECTPREFIX = "DIRECT=OS:";
         private static readonly string DIRECTPREFIX_TCP = "DIRECT=TCP:";
         private readonly static string PREFIX_TCP = "FormatName:" + DIRECTPREFIX_TCP;

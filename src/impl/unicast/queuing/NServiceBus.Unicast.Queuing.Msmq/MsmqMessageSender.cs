@@ -55,7 +55,10 @@ namespace NServiceBus.Unicast.Queuing.Msmq
 
                 try
                 {
-                    q.Send(toSend, GetTransactionTypeForSend());
+                    if (MsmqUtilities.CurrentTransaction != null)
+                        q.Send(toSend, MsmqUtilities.CurrentTransaction);
+                    else
+                        q.Send(toSend, GetTransactionTypeForSend());                    
                 }
                 catch (MessageQueueException ex)
                 {

@@ -26,6 +26,22 @@ namespace NServiceBus
         }
 
         /// <summary>
+        /// Sets the transactionality of the endpoint and whether to disable ambient transactions.
+        /// If true, the endpoint will not lose messages when exceptions occur.
+        /// If false, the endpoint may lose messages when exceptions occur.
+        /// </summary>
+        /// <param name="config"></param>
+        /// <param name="value"></param>
+        /// <param name="disableAmbient"></param>
+        /// <returns></returns>
+        public static Configure IsTransactional(this Configure config, bool value, bool disableAmbient)
+        {
+            Bootstrapper.IsTransactional = value;
+            Bootstrapper.DisableAmbientTransactions = disableAmbient;
+            return config;
+        }
+        
+        /// <summary>
         /// Sets the transactionality of the endpoint such that 
         /// the endpoint will not lose messages when exceptions occur.
         /// 

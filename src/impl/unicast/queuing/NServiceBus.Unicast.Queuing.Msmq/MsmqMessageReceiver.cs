@@ -79,7 +79,13 @@ namespace NServiceBus.Unicast.Queuing.Msmq
         {
             try
             {
-                var m = myQueue.Receive(TimeSpan.FromSeconds(secondsToWait), GetTransactionTypeForReceive());
+                var timeout = TimeSpan.FromSeconds(SecondsToWaitForMessage);
+                Message m;
+                if (MsmqUtilities.CurrentTransaction != null)
+                    m = myQueue.Receive(timeout, MsmqUtilities.CurrentTransaction);
+                else
+                    m = myQueue.Receive(timeout, GetTransactionTypeForReceive());
+
                 if (m == null)
                     return null;
 

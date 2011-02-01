@@ -15,6 +15,7 @@ namespace NServiceBus.Unicast.Transport.Transactional.Config
             transportConfig.ConfigureProperty(t => t.IsTransactional, IsTransactional);
             transportConfig.ConfigureProperty(t => t.IsolationLevel, IsolationLevel);
             transportConfig.ConfigureProperty(t => t.TransactionTimeout, TransactionTimeout);
+            transportConfig.ConfigureProperty(t => t.DisableAmbientTransactions, DisableAmbientTransactions);            
 
             var cfg = Configure.GetConfigSection<MsmqTransportConfig>();
 
@@ -28,5 +29,6 @@ namespace NServiceBus.Unicast.Transport.Transactional.Config
         public static bool IsTransactional { get; set; }
         public static IsolationLevel IsolationLevel { get; set; }
         public static TimeSpan TransactionTimeout { get; set; }
+        public static bool DisableAmbientTransactions { get; set; }        
     }
 }
