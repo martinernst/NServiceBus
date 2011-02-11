@@ -90,6 +90,7 @@
       <Link>CommonAssemblyInfo.cs</Link>
     </Compile>
     <Compile Include="Config\ConfigureWindsorBuilder.cs" />
+    <Compile Include="TrackingContainer.cs" />
     <Compile Include="WindsorObjectBuilder .cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

@@ -66,7 +66,7 @@ namespace NServiceBus.ObjectBuilder.CastleWindsor
         /// <returns></returns>
         public IContainer BuildChildContainer()
         {
-            return new WindsorObjectBuilder(new WindsorContainer{Parent = container});
+            return new TrackingContainer(container);
         }
 
         void IContainer.Configure(Type concreteComponent, DependencyLifecycle dependencyLifecycle)
@@ -98,8 +98,8 @@ namespace NServiceBus.ObjectBuilder.CastleWindsor
         }
 
         object IContainer.Build(Type typeToBuild)
-        {       
-            return container.Resolve(typeToBuild);  
+        {
+            return container.Resolve(typeToBuild);
         }
 
         IEnumerable<object> IContainer.BuildAll(Type typeToBuild)

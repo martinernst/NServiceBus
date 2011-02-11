@@ -289,7 +289,7 @@
 					workingdir="." />
 	</target>
 
-	<target name="test">
+	<target name="test" unless="${property::exists('skip.tests')}">
 		<mkdir dir="${build.base}\test-reports" />
 
 		<!-- run the core tests-->
