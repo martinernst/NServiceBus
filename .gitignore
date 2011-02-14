@@ -20,3 +20,5 @@ CommonAssemblyInfo.cs
 lib/sqlite/System.Data.SQLite.dll
 *.orig
 Samples/DataBus/storage
+
+/build.log
