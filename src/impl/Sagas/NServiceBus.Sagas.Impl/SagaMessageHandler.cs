@@ -28,81 +28,87 @@ namespace NServiceBus.Sagas.Impl
 		/// <see cref="ISagaMessage"/> will cause the existing saga instance with which it is
 		/// associated to continue.</remarks>
         public void Handle(IMessage message)
-        {
+		{
             if (!NeedToHandle(message))
                 return;
+            
+            using (var childBuilder = Builder.CreateChildBuilder())
+		    {
+		        var entitiesHandled = new List<ISagaEntity>();
+		        var sagaTypesHandled = new List<Type>();
 
-            var entitiesHandled = new List<ISagaEntity>();
-		    var sagaTypesHandled = new List<Type>();
+		        foreach (IFinder finder in Configure.GetFindersFor(message))
+		        {
+		            ISaga saga;
+		            bool sagaEntityIsPersistent = true;
+		            ISagaEntity sagaEntity = UseFinderToFindSaga(finder, message);
 
-            foreach (IFinder finder in Configure.GetFindersFor(message))
-            {
-                ISaga saga;
-                bool sagaEntityIsPersistent = true;
-                ISagaEntity sagaEntity = UseFinderToFindSaga(finder, message);
+		            if (sagaEntity == null)
+		            {
+		                Type sagaToCreate = Configure.GetSagaTypeToStartIfMessageNotFoundByFinder(message, finder);
+		                if (sagaToCreate == null)
+		                    continue;
 
-                if (sagaEntity == null)
-                {
-                    Type sagaToCreate = Configure.GetSagaTypeToStartIfMessageNotFoundByFinder(message, finder);
-                    if (sagaToCreate == null)
-                        continue;
+		                if (sagaTypesHandled.Contains(sagaToCreate))
+		                    continue; // don't create the same saga type twice for the same message
 
-                    if (sagaTypesHandled.Contains(sagaToCreate))
-                        continue; // don't create the same saga type twice for the same message
+		                sagaTypesHandled.Add(sagaToCreate);
 
-                    sagaTypesHandled.Add(sagaToCreate);
+		                Type sagaEntityType = Configure.GetSagaEntityTypeForSagaType(sagaToCreate);
+		                sagaEntity = Activator.CreateInstance(sagaEntityType) as ISagaEntity;
 
-                    Type sagaEntityType = Configure.GetSagaEntityTypeForSagaType(sagaToCreate);
-                    sagaEntity = Activator.CreateInstance(sagaEntityType) as ISagaEntity;
+		                if (sagaEntity != null)
+		                {
+		                    if (message is ISagaMessage)
+		                        sagaEntity.Id = (message as ISagaMessage).SagaId;
+		                    else
+		                        sagaEntity.Id = GenerateSagaId();
 
-                    if (sagaEntity != null)
-                    {
-                        if (message is ISagaMessage)
-                            sagaEntity.Id = (message as ISagaMessage).SagaId;
-                        else
-                            sagaEntity.Id = GenerateSagaId();
+		                    sagaEntity.Originator = Bus.CurrentMessageContext.ReturnAddress;
+		                    sagaEntity.OriginalMessageId = Bus.CurrentMessageContext.Id;
 
-                        sagaEntity.Originator = Bus.CurrentMessageContext.ReturnAddress;
-                        sagaEntity.OriginalMessageId = Bus.CurrentMessageContext.Id;
+		                    sagaEntityIsPersistent = false;
+		                }
 
-                        sagaEntityIsPersistent = false;
-                    }
+		                saga = childBuilder.Build(sagaToCreate) as ISaga;
 
-                    saga = Builder.Build(sagaToCreate) as ISaga;
+		            }
+		            else
+		            {
+		                if (entitiesHandled.Contains(sagaEntity))
+		                    continue; // don't call the same saga twice
+
+		                saga = childBuilder.Build(Configure.GetSagaTypeForSagaEntityType(sagaEntity.GetType())) as ISaga;
+		            }
+
+		            if (saga != null)
+		            {
+		                saga.Entity = sagaEntity;
+
+		                HaveSagaHandleMessage(saga, message, sagaEntityIsPersistent);
+
+		                sagaTypesHandled.Add(saga.GetType());
+		            }
+
+		            entitiesHandled.Add(sagaEntity);
+		        }
+
+		        if (entitiesHandled.Count == 0)
+		        {
+		            logger.InfoFormat(
+		                "Could not find a saga for the message type {0} with id {1}. Going to invoke SagaNotFoundHandlers.",
+		                message.GetType().FullName, Bus.CurrentMessageContext.Id);
                     
-                }
-                else
-                {
-                    if (entitiesHandled.Contains(sagaEntity))
-                        continue; // don't call the same saga twice
+		            foreach (var handler in childBuilder.BuildAll<IHandleSagaNotFound>())
+		            {
+		                logger.DebugFormat("Invoking SagaNotFoundHandler: {0}", handler.GetType().FullName);
+		                handler.Handle(message);
+		            }
+		        }
+		    }
+		}
 
-                    saga = Builder.Build(Configure.GetSagaTypeForSagaEntityType(sagaEntity.GetType())) as ISaga;
-                }
-
-                if (saga != null)
-                {
-                    saga.Entity = sagaEntity;
-
-                    HaveSagaHandleMessage(saga, message, sagaEntityIsPersistent);
-
-                    sagaTypesHandled.Add(saga.GetType());
-                }
-
-                entitiesHandled.Add(sagaEntity);
-            }
-
-            if (entitiesHandled.Count == 0)
-            {
-                logger.InfoFormat("Could not find a saga for the message type {0} with id {1}. Going to invoke SagaNotFoundHandlers.", message.GetType().FullName, Bus.CurrentMessageContext.Id);
-                foreach (var handler in NServiceBus.Configure.Instance.Builder.BuildAll<IHandleSagaNotFound>())
-                {
-                    logger.DebugFormat("Invoking SagaNotFoundHandler: {0}", handler.GetType().FullName);
-                    handler.Handle(message);
-                }
-            }
-        }
-
-        /// <summary>
+	    /// <summary>
         /// Decides whether the given message should be handled by the saga infrastructure
         /// </summary>
         /// <param name="message">The message being processed</param>
