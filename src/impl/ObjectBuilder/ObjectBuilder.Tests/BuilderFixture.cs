@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using NServiceBus.ObjectBuilder.Autofac;
 using NServiceBus.ObjectBuilder.CastleWindsor;
+using NServiceBus.ObjectBuilder.Ninject;
 using NServiceBus.ObjectBuilder.Spring;
 using NServiceBus.ObjectBuilder.StructureMap;
 using NServiceBus.ObjectBuilder.Unity;
@@ -40,7 +41,7 @@ namespace ObjectBuilder.Tests
                     failed = true;
                 }
             }
-            Assert.False(failed,"One or more of the builers failed");
+            Assert.False(failed,"One or more of the builders failed");
          }
 
         [SetUp]
@@ -53,7 +54,9 @@ namespace ObjectBuilder.Tests
                                      new AutofacObjectBuilder(),
                                      new WindsorObjectBuilder(),
                                      new UnityObjectBuilder(),
-                                     new SpringObjectBuilder()
+                                     new SpringObjectBuilder(),
+                                     new NinjectObjectBuilder(),
+                                     //new NServiceBus.ObjectBuilder.Unity2.UnityObjectBuilder()
                                  };
 
             var inilialize = InitializeBuilder();
